@@ -47,7 +47,7 @@ class JiraApi:
         # Open the file and write the output
         with open(file_path, 'w', encoding='utf-8') as file:
             json_output = json.dump(output, file, ensure_ascii=False, indent=4) # Convert the dictionary to string before writing
-        # hey
+        
         return json_output
 
     def remove_nulls(self, data):
