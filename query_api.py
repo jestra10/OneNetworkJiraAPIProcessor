@@ -1,3 +1,6 @@
+#!/home/jestra10/JQLv2/.venv/Scripts/python.exe
+
+
 import os
 import requests
 from getpass import getpass
@@ -7,6 +10,11 @@ import pytz
 import re  # Regular expression library for simple keyword/emotion detection
 import json
 import pandas as pd
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from postmarker.core import PostmarkClient
+# from postmarker.models.email import PostmarkMessage
 
 class JiraApi:
     def __init__(self):
@@ -28,12 +36,15 @@ class JiraApi:
             "Content-Type": "application/json"
         }
 
-        # Send a request to JIRA to retrieve issues
-        response = requests.get(jira_url + api_endpoint + maxResults_endpoint + '1', headers=headers)
+        try:
+            # Send a request to JIRA to retrieve issues
+            response = requests.get(jira_url + api_endpoint + maxResults_endpoint + '1', headers=headers)
 
-        # Send a new request to JIRA to retrieve ALL issues
-        maxResults = response.json().get('total', [])
-        response = requests.get(jira_url + api_endpoint + maxResults_endpoint + f'{maxResults}', headers=headers)
+            # Send a new request to JIRA to retrieve ALL issues
+            maxResults = response.json().get('total', [])
+            response = requests.get(jira_url + api_endpoint + maxResults_endpoint + f'{maxResults}', headers=headers)
+        except:
+            print("Error retrieving JSON from JIRA")
 
         # print(response.json())
         # print(response.status_code)
@@ -42,32 +53,48 @@ class JiraApi:
         # output = self.remove_nulls(response.json())
 
         output = response.json()
+
+        """Below code would be used to filter base issue based on status."""
+        # The status value in the base issues that determines if the issue is kept or not
+        status_to_not_keep = {'marked for completion', 'resolved', 'closed', 'canceled', 'done', 'will not implement', 'work completed', 'answered', 'not a bug'}
+
+        try:
+            status_filtered_data = [
+                issue for issue in output['issues']
+                if issue['fields'].get('status').get('name', '').lower() not in status_to_not_keep
+            ]
+            output['issues'] = status_filtered_data
+        except:
+            print("Error trying to filter JSON's base issues based on status")
+
+        # type_to_not_keep = {'new feature'}
+        # try:
+        #     status_filtered_data = [
+        #         issue for issue in output['issues']
+        #         if issue['fields'].get('status').get('name', '').lower() not in status_to_not_keep
+        #     ]
+        #     output['issues'] = status_filtered_data
+        # except:
+        #     print("Error trying to filter JSON's base issues based on status")
         
         # Define the keys you want to keep
-        keys_to_keep = {'id', 'key', 'lastViewed', 'issuelinks', 'issuetype', 'updated', 'summary', 'priority', 'status', 'created', 'description'}
+        keys_to_keep = {'id', 'key', 'labels', 'lastViewed', 'issuelinks', 'issuetype', 'updated', 'summary', 'priority', 'status', 'created', 'description', 'fixVersions'}
 
-        # Filter the data
-        # filtered_data = [{k: v for k, v in issue['fields'].items() if k in keys_to_keep} for issue in output['issues']]
-        filtered_data = [
-            {
-                **{k: v for k, v in issue.items() if k in keys_to_keep},  # Include all top-level key-value pairs except 'fields'
-                'fields': {k: v for k, v in issue['fields'].items() if k in keys_to_keep}  # Filtered 'fields' dictionary
-            }
-            for issue in output['issues']
-        ]
-
-        output['issues'] = filtered_data
+        try: 
+            # Filter the data
+            # filtered_data = [{k: v for k, v in issue['fields'].items() if k in keys_to_keep} for issue in output['issues']]
+            filtered_data = [
+                {
+                    **{k: v for k, v in issue.items() if k in keys_to_keep},  # Include all top-level key-value pairs except 'fields'
+                    'fields': {k: v for k, v in issue['fields'].items() if k in keys_to_keep}  # Filtered 'fields' dictionary
+                }
+                for issue in output['issues']
+            ]
+            output['issues'] = filtered_data
+        except:
+            print("Error trying to filter certain keys throughout whole JSON")
         
-        """Below code would be used to filter base issue based on status."""
-        # # The value in the sub-dictionary that determines if the main dictionary is kept
-        # status_to_keep = {'open'}
-
-        # status_filtered_data = [
-        #     issue for issue in output['issues']
-        #     if issue['fields'].get('status') == status_to_keep
-        # ]
-
-        print(output)
+        # print(output)
 
         """Below code would be used to make an excel sheet based on the JSON"""
         # # Making an excel file and create a DataFrame
@@ -82,8 +109,14 @@ class JiraApi:
         with open(file_path, 'w', encoding='utf-8') as file:
             json_output = json.dump(output, file, ensure_ascii=False, indent=4) # Convert the dictionary to string before writing
         
-        self.filter_issues(output)
-        
+        critical_issues = self.filter_issues(output, jira_url, headers)
+        api_issue_endpoint = '/rest/api/2/issue/'
+        data = json.dumps({ "update": { "labels": [ {"add": "Autoflag"} ] } })
+
+        for issue in critical_issues:
+            check = requests.put(jira_url + api_issue_endpoint + issue, headers=headers, data=data)
+            print(check.status_code)
+        self.send_email(critical_issues, jira_url)
         return json_output
     
     """
@@ -113,35 +146,67 @@ class JiraApi:
         Returns:
         list: A list of filtered issues that meet the requirements.
     """
-    def filter_issues(self, data):
+    def filter_issues(self, data, jira_url, headers):
         filtered_issues = []
+        testing_array = []
+        fix_version_to_not_keep = {'neo 3.11', 'neo 3.10', 'neo 3.12', 'neo 3.9.1', 'sdk', 'glg neo 3.10.1', 'neo 3.9.0.0.7'}
 
         # Iterate over each issue in the list of issues
         for issue in data.get('issues', []):
             # Retrieve information
             main_status = issue.get('fields', {}).get('status', {})
             date = issue.get('fields', {}).get('updated', {})
-            # Check if it hasn't been updated in 4 days
-            if self.is_older_than_four_days(date, 4):
-                filtered_issues.append(issue.get('key', {}))
+            fix_versions = issue.get('fields', {}).get('fixVersions', {})
+            if len(fix_versions) > 0:
+                    fix_version_name = fix_versions[0].get('name', {})
+            else:
+                fix_version_name = 'placeholder'
             # Check if the status is set as blocked
-            elif main_status == "Blocked":
-                filtered_issues.append(issue.get('key', {}))
+            if main_status == "Blocked":
+                value = issue.get('key', {})
+                if value not in filtered_issues:
+                    if fix_version_name.lower() not in fix_version_to_not_keep:
+                        filtered_issues.append(value)
+            # Check if it hasn't been updated in 4 days
+            elif self.is_older_than_four_days(date, 4):
+                value = issue.get('key', {})
+                type_check = issue.get('fields', {}).get('issuetype', {}).get('name', {})
+                if value not in testing_array:
+                    if type_check != "New Feature":
+                        if fix_version_name.lower() not in fix_version_to_not_keep:
+                            # This is a temporary filter
+                            if 'QAT' not in value:
+                                testing_array.append(value)
+                                # filtered_issues.append(issue.get('key', {}))
 
             # Navigate to the 'issuelinks' sub-dictionary
             issuelinks = issue.get('fields', {}).get('issuelinks', {})
-            
             for link_issue in issuelinks:
                 # Check for 'inwardIssue' and 'outwardIssue' keys within 'issuelinks'
                 similar_issue = self.get_issue_value(link_issue)
                 status = similar_issue.get('fields', {}).get('status', {}).get('name', {})
-                
+
                 # If status is blocked add it
                 if status == "Blocked":
-                    filtered_issues.append(similar_issue.get('key', {}))
+                    value = similar_issue.get('key', {})
+
+                    if value not in filtered_issues:
+                        link = '/rest/api/2/issue/'
+                        response = requests.get(jira_url + link + value, headers=headers)
+                        output = response.json()
+
+                        fix_versions_linked = output.get('fields', {}).get('fixVersions', {})
+                        if len(fix_versions_linked) > 0:
+                            fix_version_linked_name = fix_versions_linked[0].get('name', {})
+                        else:
+                            fix_version_linked_name = 'placeholder'
+                        
+                        if fix_version_linked_name.lower() not in fix_version_to_not_keep:
+                            filtered_issues.append(value)
+        print(testing_array)
         print(filtered_issues)
-        
-        return filtered_issues
+        return_issues = testing_array + filtered_issues
+        return return_issues
     
     """
         Retrieves the value of the issue key from the dictionary.
@@ -183,6 +248,56 @@ class JiraApi:
         return difference >= timedelta(days=n_days)
     
     """
+        Send an email with the links to the problem issues.
+
+        Args:
+        keys_list (list): List of keys to issues that have not been updated in more than 4 days or are blocked.
+
+        Returns:
+        output_code (str): Code on whether or not the email request went through
+    """
+    def send_email(self, keys_list, jira_url):
+        text = "<p>Here are the issues and links that are blocked or older than 4 days today.</p>"
+        link = '/browse/'
+        for key in keys_list:
+            text = text + '<p>' + key + ': ' + '<a href=' +jira_url + link + key + '>' + key + '</a></p>'
+        # Initialize the Postmark client with your server token
+        email_token = os.getenv('EMAIL_API_KEY')
+        client = PostmarkClient(server_token=email_token)
+
+        # Create a Postmark message
+        client.emails.send(
+            From="jaestrada@elogex.com",
+            To="jaestrada@elogex.com",
+            Subject="Issues That Are Blocked or Older Than 4 Days",
+            HtmlBody=text
+        )
+        print(text)
+
+
+        # # Email configuration
+        # sender_email = "jaestrada@elogex.com"
+        # receiver_email = "jaestrada@elogex.com"
+        # subject = "Test"
+        # body = "Test"
+
+        # # Create a multipart message and set headers
+        # message = MIMEMultipart()
+        # message["From"] = sender_email
+        # message["To"] = receiver_email
+        # message["Subject"] = subject
+
+        # # Add body to email
+        # message.attach(MIMEText(body, "plain"))
+
+        # # Connect to the SMTP server
+        # with smtplib.SMTP("smtp.office365.com", 587) as server:
+        #     server.starttls()  # Enable TLS encryption
+        #     server.login("jaestrada@elogex.com", "Passport611!")
+        #     text = message.as_string()
+        #     server.sendmail(sender_email, receiver_email, text)
+
+    """
     Commented code below this is an example of how to do it manually,
     would have to change the fields it accesses in the JSON however to make it work.
     """
@@ -218,7 +333,11 @@ class JiraApi:
     #     # Print blocked issues
     #     print(blocked_issues)
 
-if __name__ == "__main__":
-    jira_api = JiraApi()  # Create an instance of the JiraApi class
-    issues = jira_api.get_issues()  # Call the get_issues method
-    # print(issues)  # Print the issues retrieved
+# if __name__ == "__main__":
+#     jira_api = JiraApi()  # Create an instance of the JiraApi class
+#     issues = jira_api.get_issues()  # Call the get_issues method
+#     # keys_list = ['SGLG-2576', 'LN-110866', 'LN-110859', 'LN-110797', 'LN-110765', 'LN-110586', 'LN-109372', 'LN-108719', 'LN-108697', 'LN-101457', 'INTEG-1953']
+#     # email = jira_api.send_email(keys_list, 'https://issues.onenetwork.com')
+jira_api = JiraApi()  # Create an instance of the JiraApi class
+issues = jira_api.get_issues()  # Call the get_issues method
+print("worked")
