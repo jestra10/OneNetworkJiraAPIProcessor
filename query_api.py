@@ -56,7 +56,7 @@ class JiraApi:
 
         """Below code would be used to filter base issue based on status."""
         # The status value in the base issues that determines if the issue is kept or not
-        status_to_not_keep = {'marked for completion', 'resolved', 'closed', 'canceled', 'done', 'will not implement', 'work completed', 'answered', 'not a bug'}
+        status_to_not_keep = {'marked for completion', 'resolved', 'closed', 'canceled', 'done', 'will not implement', 'work completed', 'answered', 'not a bug', 'waiting for customer'}
 
         try:
             status_filtered_data = [
@@ -149,7 +149,7 @@ class JiraApi:
     def filter_issues(self, data, jira_url, headers):
         filtered_issues = []
         testing_array = []
-        fix_version_to_not_keep = {'neo 3.11', 'neo 3.10', 'neo 3.12', 'neo 3.9.1', 'sdk', 'glg neo 3.10.1', 'neo 3.9.0.0.7'}
+        fix_version_to_not_keep = {'neo 3.11', 'neo 3.10', 'neo 3.12', 'neo 3.9.1', 'sdk', 'glg neo 3.10.1', 'neo 3.9.0.0.7', 'glg neo 3.9.1'}
 
         # Iterate over each issue in the list of issues
         for issue in data.get('issues', []):
@@ -267,13 +267,12 @@ class JiraApi:
 
         # Create a Postmark message
         client.emails.send(
-            From="jaestrada@elogex.com",
-            To="jaestrada@elogex.com",
+            From="jaestrada@onenetwork.com",
+            To="kwaldman@onenetwork.com , jaestrada@onenetwork.com" ,
             Subject="Issues That Are Blocked or Older Than 4 Days",
             HtmlBody=text
         )
         print(text)
-
 
         # # Email configuration
         # sender_email = "jaestrada@elogex.com"
