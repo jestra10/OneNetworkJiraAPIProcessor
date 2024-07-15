@@ -14,11 +14,300 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from postmarker.core import PostmarkClient
+from crew_theme import ThemeCrew
 # from postmarker.models.email import PostmarkMessage
 
 class JiraApi:
     def __init__(self):
         pass
+    def identify_themes_better_model(self):
+        # JIRA API details
+        jira_url = 'https://issues.onenetwork.com'  # Replace with your JIRA URL
+        # Endpoint below only displays 50 issues.
+        api_endpoint = '/rest/api/2/search?jql=filter=45133'
+        # username = input("Enter JIRA username: ")  # Prompting the user for JIRA username
+        # password = getpass("Enter JIRA password: ")  # Securely prompting for JIRA password
+        maxResults_endpoint = '&maxResults='
+
+        load_dotenv()
+        jira_api_key = os.getenv('JIRA_API_KEY')
+        token = jira_api_key
+        headers = {
+            "Authorization": "Bearer " + f"{token}",
+            "Content-Type": "application/json"
+        }
+
+        try:
+            # Send a request to JIRA to retrieve issues
+            response = requests.get(jira_url + api_endpoint + maxResults_endpoint + '1', headers=headers)
+
+            # Send a new request to JIRA to retrieve ALL issues
+            maxResults = response.json().get('total', [])
+            response = requests.get(jira_url + api_endpoint + maxResults_endpoint + f'{maxResults}', headers=headers)
+        except:
+            print("Error retrieving JSON from JIRA")
+
+        output = response.json()
+        
+        # Define the keys you want to keep
+        keys_to_keep = {'key', 'summary', 'description'}#, 'issuelinks'}
+
+        try: 
+            # Filter the data
+            # filtered_data = [{k: v for k, v in issue['fields'].items() if k in keys_to_keep} for issue in output['issues']]
+            filtered_data = [
+                issue for issue in output['issues']
+                if "LN" in issue.get('key', {}) #or "LN" in self.helper_identify_themes(issue) #this gets based issues but not linked issues look into it
+            ]
+            output['issues'] = filtered_data
+
+            filtered_data = [
+                {
+                    **{k: v for k, v in issue.items() if k in keys_to_keep},  # Include all top-level key-value pairs except 'fields'
+                    'fields': {k: v for k, v in issue['fields'].items() if k in keys_to_keep}  # Filtered 'fields' dictionary
+                }
+                for issue in output['issues']
+            ]
+            output['issues'] = filtered_data
+        except:
+            print("Error trying to filter certain keys throughout whole JSON")
+
+        # Specify the file path and mode
+        file_path = 'output_theme.txt'  # Change 'output.txt' to your desired file path
+
+        # Open the file and write the output
+        with open(file_path, 'w', encoding='utf-8') as file:
+            json_output = json.dump(output, file, ensure_ascii=False, indent=4) # Convert the dictionary to string before writing
+        
+        length_segment = round(len(output['issues'])/6)
+        split_issues1 = output['issues'][:length_segment]
+        split_issues2 = output['issues'][(length_segment+1):(length_segment*2)]
+        split_issues3 = output['issues'][((length_segment*2)+1):(length_segment*3)]
+        split_issues4 = output['issues'][((length_segment*3)+1):(length_segment*4)]
+        split_issues5 = output['issues'][((length_segment*4)+1):(length_segment*5)]
+        rest = output['issues'][((length_segment*5)+1):]
+        readable_output = json.dumps(output['issues'], indent=4)
+        readable_output1 = json.dumps(split_issues1, indent=4)
+        readable_output2 = json.dumps(split_issues2, indent=4)
+        readable_output3 = json.dumps(split_issues3, indent=4)
+        readable_output4 = json.dumps(split_issues4, indent=4)
+        readable_output5 = json.dumps(split_issues5, indent=4)
+        readable_output6 = json.dumps(rest, indent=4)
+        cleaned_string = re.sub(r'[{}]', '', readable_output)
+        cleaned_string1 = re.sub(r'[{}]', '', readable_output1)
+        cleaned_string2 = re.sub(r'[{}]', '', readable_output2)
+        cleaned_string3 = re.sub(r'[{}]', '', readable_output3)
+        cleaned_string4 = re.sub(r'[{}]', '', readable_output4)
+        cleaned_string5 = re.sub(r'[{}]', '', readable_output5)
+        cleaned_string6 = re.sub(r'[{}]', '', readable_output6)
+        print(cleaned_string)
+        theme_crew = ThemeCrew()
+        result1 = theme_crew.problem_identifier(cleaned_string1)
+        # Specify the file path
+        file_path = 'Outputs/output14.txt'
+        # Open the file in write mode and write the string to the file
+        with open(file_path, 'w') as file:
+            file.write(result1)
+        # Specify the file path
+        result2 = theme_crew.problem_identifier(cleaned_string2)
+        # Specify the file path
+        file_path = 'Outputs/output24.txt'
+        # Open the file in write mode and write the string to the file
+        with open(file_path, 'w') as file:
+            file.write(result2)
+        result3 = theme_crew.problem_identifier(cleaned_string3)
+         # Specify the file path
+        file_path = 'Outputs/output34.txt'
+        # Open the file in write mode and write the string to the file
+        with open(file_path, 'w') as file:
+            file.write(result3)
+        result4 = theme_crew.problem_identifier(cleaned_string4)
+         # Specify the file path
+        file_path = 'Outputs/output44.txt'
+        # Open the file in write mode and write the string to the file
+        with open(file_path, 'w') as file:
+            file.write(result4)
+        result5 = theme_crew.problem_identifier(cleaned_string5)
+         # Specify the file path
+        file_path = 'Outputs/output54.txt'
+        # Open the file in write mode and write the string to the file
+        with open(file_path, 'w') as file:
+            file.write(result5)
+        result6 = theme_crew.problem_identifier(cleaned_string6)
+        # Specify the file path
+        file_path = 'Outputs/output64.txt'
+        # Open the file in write mode and write the string to the file
+        with open(file_path, 'w') as file:
+            file.write(result6)
+        
+        # final_result = theme_crew.problem_identifier(cleaned_string)
+    
+        final_result = theme_crew.synthesize(result1+ '\n' + result2 + '\n' + result3 + '\n' + result4 + '\n' + result5 + '\n' + result6)
+        print(final_result)
+        # Specify the file path
+        file_path = 'Outputs/final4.txt'
+        # Open the file in write mode and write the string to the file
+        with open(file_path, 'w') as file:
+            file.write(final_result)
+        return json_output
+    
+    def identify_themes(self):
+        # JIRA API details
+        jira_url = 'https://issues.onenetwork.com'  # Replace with your JIRA URL
+        # Endpoint below only displays 50 issues.
+        api_endpoint = '/rest/api/2/search?jql=filter=45133'
+        # username = input("Enter JIRA username: ")  # Prompting the user for JIRA username
+        # password = getpass("Enter JIRA password: ")  # Securely prompting for JIRA password
+        maxResults_endpoint = '&maxResults='
+
+        load_dotenv()
+        jira_api_key = os.getenv('JIRA_API_KEY')
+        token = jira_api_key
+        headers = {
+            "Authorization": "Bearer " + f"{token}",
+            "Content-Type": "application/json"
+        }
+
+        try:
+            # Send a request to JIRA to retrieve issues
+            response = requests.get(jira_url + api_endpoint + maxResults_endpoint + '1', headers=headers)
+
+            # Send a new request to JIRA to retrieve ALL issues
+            maxResults = response.json().get('total', [])
+            response = requests.get(jira_url + api_endpoint + maxResults_endpoint + f'{maxResults}', headers=headers)
+        except:
+            print("Error retrieving JSON from JIRA")
+
+        output = response.json()
+        
+        # Define the keys you want to keep
+        keys_to_keep = {'key', 'summary', 'description'}#, 'issuelinks'}
+
+        try: 
+            # Filter the data
+            # filtered_data = [{k: v for k, v in issue['fields'].items() if k in keys_to_keep} for issue in output['issues']]
+            filtered_data = [
+                issue for issue in output['issues']
+                if "LN" in issue.get('key', {}) #or "LN" in self.helper_identify_themes(issue) #this gets based issues but not linked issues look into it
+            ]
+            output['issues'] = filtered_data
+
+            filtered_data = [
+                {
+                    **{k: v for k, v in issue.items() if k in keys_to_keep},  # Include all top-level key-value pairs except 'fields'
+                    'fields': {k: v for k, v in issue['fields'].items() if k in keys_to_keep}  # Filtered 'fields' dictionary
+                }
+                for issue in output['issues']
+            ]
+            output['issues'] = filtered_data
+
+            """Below code was an attemt to filter linked issues to only be of type LN."""
+            # for issue in output['issues']:
+            #     issue_links = issue.get('fields', {}).get('issuelinks', {})
+            #     for link_issue in issue_links:
+            #         # Check for 'inwardIssue' and 'outwardIssue' keys within 'issuelinks'
+            #         similar_issue = self.get_issue_value(link_issue)
+            #         if "LN" not in similar_issue.get('key', {}):
+            #             link_issue = None
+            #         else:
+            #             filtered_data = [
+            #                 {
+            #                     **{k: v for k, v in similar_issue.items() if k in keys_to_keep},  # Include all top-level key-value pairs except 'fields'
+            #                     'fields': {k: v for k, v in similar_issue['fields'].items() if k in keys_to_keep}  # Filtered 'fields' dictionary
+            #                 }
+            #             ]
+            #             similar_issue = filtered_data
+            # self.remove_nulls(output)
+
+        except:
+            print("Error trying to filter certain keys throughout whole JSON")
+
+        # Specify the file path and mode
+        file_path = 'output_theme.txt'  # Change 'output.txt' to your desired file path
+
+        # Open the file and write the output
+        with open(file_path, 'w', encoding='utf-8') as file:
+            json_output = json.dump(output, file, ensure_ascii=False, indent=4) # Convert the dictionary to string before writing
+        
+        length_segment = round(len(output['issues'])/6)
+        split_issues1 = output['issues'][:length_segment]
+        split_issues2 = output['issues'][(length_segment+1):(length_segment*2)]
+        split_issues3 = output['issues'][((length_segment*2)+1):(length_segment*3)]
+        split_issues4 = output['issues'][((length_segment*3)+1):(length_segment*4)]
+        split_issues5 = output['issues'][((length_segment*4)+1):(length_segment*5)]
+        rest = output['issues'][((length_segment*5)+1):]
+        readable_output = json.dumps(output['issues'], indent=4)
+        readable_output1 = json.dumps(split_issues1, indent=4)
+        readable_output2 = json.dumps(split_issues2, indent=4)
+        readable_output3 = json.dumps(split_issues3, indent=4)
+        readable_output4 = json.dumps(split_issues4, indent=4)
+        readable_output5 = json.dumps(split_issues5, indent=4)
+        readable_output6 = json.dumps(rest, indent=4)
+        cleaned_string = re.sub(r'[{}]', '', readable_output)
+        cleaned_string1 = re.sub(r'[{}]', '', readable_output1)
+        cleaned_string2 = re.sub(r'[{}]', '', readable_output2)
+        cleaned_string3 = re.sub(r'[{}]', '', readable_output3)
+        cleaned_string4 = re.sub(r'[{}]', '', readable_output4)
+        cleaned_string5 = re.sub(r'[{}]', '', readable_output5)
+        cleaned_string6 = re.sub(r'[{}]', '', readable_output6)
+        print(cleaned_string)
+        theme_crew = ThemeCrew()
+        result1 = theme_crew.problem_identifier(cleaned_string1)
+        result2 = theme_crew.problem_identifier(cleaned_string2)
+        result3 = theme_crew.problem_identifier(cleaned_string3)
+        result4 = theme_crew.problem_identifier(cleaned_string4)
+        result5 = theme_crew.problem_identifier(cleaned_string5)
+        result6 = theme_crew.problem_identifier(cleaned_string6)
+
+        # Specify the file path
+        file_path = 'Outputs/output1.txt'
+        # Open the file in write mode and write the string to the file
+        with open(file_path, 'w') as file:
+            file.write(result1)
+        # Specify the file path
+        file_path = 'Outputs/output2.txt'
+        # Open the file in write mode and write the string to the file
+        with open(file_path, 'w') as file:
+            file.write(result2)
+        # Specify the file path
+        file_path = 'Outputs/output3.txt'
+        # Open the file in write mode and write the string to the file
+        with open(file_path, 'w') as file:
+            file.write(result3)
+        # Specify the file path
+        file_path = 'Outputs/output4.txt'
+        # Open the file in write mode and write the string to the file
+        with open(file_path, 'w') as file:
+            file.write(result4)
+        # Specify the file path
+        file_path = 'Outputs/output5.txt'
+        # Open the file in write mode and write the string to the file
+        with open(file_path, 'w') as file:
+            file.write(result5)
+        # Specify the file path
+        file_path = 'Outputs/output6.txt'
+        # Open the file in write mode and write the string to the file
+        with open(file_path, 'w') as file:
+            file.write(result6)
+    
+        final_result = theme_crew.synthesize(result1+ '\n' + result2 + '\n' + result3 + '\n' + result4 + '\n' + result5 + '\n' + result6)
+        print(final_result)
+        # Specify the file path
+        file_path = 'Outputs/final.txt'
+        # Open the file in write mode and write the string to the file
+        with open(file_path, 'w') as file:
+            file.write(final_result)
+        return json_output
+    
+    def helper_identify_themes(self, issue):
+        issue_links = issue.get('fields', {}).get('issuelinks', {})
+        keys = ""
+        for link_issue in issue_links:
+            # Check for 'inwardIssue' and 'outwardIssue' keys within 'issuelinks'
+            similar_issue = self.get_issue_value(link_issue)
+            keys = keys + similar_issue.get('key', {})
+        return keys
+    
     def get_issues(self):
         # JIRA API details
         jira_url = 'https://issues.onenetwork.com'  # Replace with your JIRA URL
@@ -338,5 +627,6 @@ class JiraApi:
 #     # keys_list = ['SGLG-2576', 'LN-110866', 'LN-110859', 'LN-110797', 'LN-110765', 'LN-110586', 'LN-109372', 'LN-108719', 'LN-108697', 'LN-101457', 'INTEG-1953']
 #     # email = jira_api.send_email(keys_list, 'https://issues.onenetwork.com')
 jira_api = JiraApi()  # Create an instance of the JiraApi class
-issues = jira_api.get_issues()  # Call the get_issues method
+issues = jira_api.identify_themes_better_model()
+# issues = jira_api.get_issues()  # Call the get_issues method
 print("worked")

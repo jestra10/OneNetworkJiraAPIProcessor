@@ -1,6 +1,6 @@
 .env
 .venv
 __pycache__
-output.txt
+*.txt
 outputdata.xlsx
-log.txt
+poetry.lock
