@@ -180,7 +180,7 @@ class ThemeCrew:
                         "       ...\n"
                         "Your final answer must include a comprehensive and organized list of categorized tickets with detailed justifications for each grouping."
                         "Ensure that the key is a hyperlink with the link to the JIRA ticket. The link will follow the format: https://issues.onenetwork.com/browse/[key] where [key] is the ticket key."
-                        "Also ensure that the response is in HTML format with the correct tabs and breaklines for readability. Make sure that each part of each ticket gets its own bullet point."
+                        "Also ensure that the response is in HTML format with the correct tabs and breaklines for readability. Make sure that each part of each ticket (like summary, description, etc.) gets its own bullet point."
                     ),
                     agent=senior_researcher_agent,
                 )

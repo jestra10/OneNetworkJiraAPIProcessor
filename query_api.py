@@ -3,6 +3,7 @@
 
 import os
 import requests
+import math
 from getpass import getpass
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
@@ -173,7 +174,7 @@ class JiraApi:
         #     print("Error trying to filter JSON's base issues based on status")
         
         # Define the keys you want to keep
-        keys_to_keep = {'id', 'key', 'labels', 'lastViewed', 'issuelinks', 'issuetype', 'updated', 'summary', 'priority', 'status', 'created', 'description', 'fixVersions', 'reporter', 'duedate'}
+        keys_to_keep = {'id', 'key', 'labels', 'lastViewed', 'issuelinks', 'issuetype', 'updated', 'summary', 'priority', 'status', 'created', 'description', 'fixVersions', 'reporter', 'assignee', 'duedate'}
 
         try: 
             # Filter the data
@@ -204,7 +205,7 @@ class JiraApi:
         with open(file_path, 'w', encoding='utf-8') as file:
             json_output = json.dump(output, file, ensure_ascii=False, indent=4) # Convert the dictionary to string before writing
         
-        critical_issues, actual_issues = self.filter_issues(output, jira_url, headers)
+        actual_issues, oneis_dictionary = self.filter_issues(output, jira_url, headers, status_to_not_keep)
         api_issue_endpoint = '/rest/api/2/issue/'
         data = json.dumps({ "update": { "labels": [ {"add": "Autoflag"} ] } })
         
@@ -225,8 +226,8 @@ class JiraApi:
             },
         }
         AI_input_list = []
-        for issue in critical_issues:
-            check = requests.put(jira_url + api_issue_endpoint + issue, headers=headers, data=data)
+        # for issue in critical_issues:
+        #     check = requests.put(jira_url + api_issue_endpoint + issue, headers=headers, data=data)
             # print(check.status_code)
             # important_data = requests.get(jira_url + api_issue_endpoint + issue, headers=headers)
             # important_data = important_data.json()
@@ -247,13 +248,16 @@ class JiraApi:
             #         'fields': {k: v for k, v in important_data['fields'].items() if k in AI_keys_to_keep}  # Filtered 'fields' dictionary
             #     }
             # ]
+            key_name = issue.get('key', {})
+            check = requests.put(jira_url + api_issue_endpoint + key_name, headers=headers, data=data)
             filtered_data = self.filter_json(issue, AI_keys_to_keep)
             readable_output = json.dumps(filtered_data, indent=4)
             cleaned_string = re.sub(r'[{}]', '', readable_output)
             AI_input_list.append(cleaned_string)
         crew = ThemeCrew()
-        additional_text = crew.AI_summary(AI_input_list)
-        self.send_email(critical_issues, jira_url, additional_text)
+        # additional_text = crew.AI_summary(AI_input_list)
+        additional_text = "blah blah blah"
+        self.send_email(actual_issues, jira_url, additional_text, oneis_dictionary)
         return json_output
     
     def filter_json(self, data, keys_to_keep):
@@ -301,11 +305,14 @@ class JiraApi:
         Returns:
         list: A list of filtered issues that meet the requirements.
     """
-    def filter_issues(self, data, jira_url, headers):
+    def filter_issues(self, data, jira_url, headers, status_to_not_keep):
         filtered_issues = []
-        testing_array = []
+        # testing_array = []
         actual_issues = []
+        oneis_issues = {}
+
         fix_version_to_not_keep = {'neo 3.11', 'neo 3.10', 'neo 3.12', 'neo 3.9.1', 'sdk', 'glg neo 3.10.1', 'neo 3.9.0.0.7', 'glg neo 3.9.1'}
+        link = '/rest/api/2/issue/'
 
         # Iterate over each issue in the list of issues
         for issue in data.get('issues', []):
@@ -313,27 +320,34 @@ class JiraApi:
             main_status = issue.get('fields', {}).get('status', {})
             date = issue.get('fields', {}).get('updated', {})
             fix_versions = issue.get('fields', {}).get('fixVersions', {})
+            key = issue.get('key', {})
+            try:
+                assignee = issue.get('fields', {}).get('assignee', {}).get('name', {})
+            except:
+                assignee = "No Owner"
+            summary = issue.get('fields', {}).get('summary', {})
             if len(fix_versions) > 0:
                     fix_version_name = fix_versions[0].get('name', {})
             else:
                 fix_version_name = 'placeholder'
+            if "ONEIS" in key:
+                if key not in oneis_issues:
+                    oneis_issues.update({key: {"key": key, "owner": assignee, "summary": summary}})
             # Check if the status is set as blocked
             if main_status == "Blocked":
-                value = issue.get('key', {})
-                if value not in filtered_issues:
+                if key not in filtered_issues:
                     if fix_version_name.lower() not in fix_version_to_not_keep:
-                        filtered_issues.append(value)
+                        filtered_issues.append(key)
                         actual_issues.append(issue)
             # Check if it hasn't been updated in 4 days
             elif self.is_older_than_four_days(date, 4):
-                value = issue.get('key', {})
                 type_check = issue.get('fields', {}).get('issuetype', {}).get('name', {})
-                if value not in testing_array:
+                if key not in filtered_issues:
                     if type_check != "New Feature":
                         if fix_version_name.lower() not in fix_version_to_not_keep:
                             # This is a temporary filter
-                            if 'QAT' not in value:
-                                testing_array.append(value)
+                            if 'QAT' not in key:
+                                filtered_issues.append(key)
                                 actual_issues.append(issue)
                                 # filtered_issues.append(issue.get('key', {}))
 
@@ -343,29 +357,52 @@ class JiraApi:
                 # Check for 'inwardIssue' and 'outwardIssue' keys within 'issuelinks'
                 similar_issue = self.get_issue_value(link_issue)
                 status = similar_issue.get('fields', {}).get('status', {}).get('name', {})
+                key = similar_issue.get('key', {})
+                summary = similar_issue.get('fields', {}).get('summary', {})
+                if "ONEIS" in key:
+                        if key not in oneis_issues:
+                            response = requests.get(jira_url + link + key, headers=headers)
+                            output = response.json()
+                            try:
+                                assignee = output.get('fields', {}).get('assignee', {}).get('name', {})
+                            except:
+                                assignee = "No Owner"                      
+                            oneis_issues.update({key: {"key": key, "owner": assignee, "summary": summary}})
+                if status not in status_to_not_keep:
+                    # Code for HTML table for displaying ONEIS issues
+                    '''Below code is for a FILTERED ONEIS issues dictionary'''
+                    # if "ONEIS" in key:
+                    #     if key not in oneis_issues:
+                    #         response = requests.get(jira_url + link + key, headers=headers)
+                    #         output = response.json()
+                    #         assignee = output.get('fields', {}).get('assignee', {}).get('name', {}) 
+                    #         fix_versions_linked = output.get('fields', {}).get('fixVersions', {})
+                    #         if len(fix_versions_linked) > 0:
+                    #             fix_version_linked_name = fix_versions_linked[0].get('name', {})
+                    #         else:
+                    #             fix_version_linked_name = 'placeholder'
+                            
+                    #         if fix_version_linked_name.lower() not in fix_version_to_not_keep:                        
+                    #             oneis_issues.update({key: {"key": key, "owner": assignee, "summary": summary}})
+                    # If status is blocked add it
+                    if status == "Blocked":
+                        if key not in filtered_issues:
+                            response = requests.get(jira_url + link + key, headers=headers)
+                            output = response.json()
 
-                # If status is blocked add it
-                if status == "Blocked":
-                    value = similar_issue.get('key', {})
-
-                    if value not in filtered_issues:
-                        link = '/rest/api/2/issue/'
-                        response = requests.get(jira_url + link + value, headers=headers)
-                        output = response.json()
-
-                        fix_versions_linked = output.get('fields', {}).get('fixVersions', {})
-                        if len(fix_versions_linked) > 0:
-                            fix_version_linked_name = fix_versions_linked[0].get('name', {})
-                        else:
-                            fix_version_linked_name = 'placeholder'
-                        
-                        if fix_version_linked_name.lower() not in fix_version_to_not_keep:
-                            filtered_issues.append(value)
-                            actual_issues.append(issue)
-        print(testing_array)
-        print(filtered_issues)
-        return_issues = testing_array + filtered_issues
-        return return_issues, actual_issues
+                            fix_versions_linked = output.get('fields', {}).get('fixVersions', {})
+                            if len(fix_versions_linked) > 0:
+                                fix_version_linked_name = fix_versions_linked[0].get('name', {})
+                            else:
+                                fix_version_linked_name = 'placeholder'
+                            
+                            if fix_version_linked_name.lower() not in fix_version_to_not_keep:
+                                filtered_issues.append(key)
+                                actual_issues.append(issue)
+        # print(testing_array)
+        # print(filtered_issues)
+        # return_issues = testing_array + filtered_issues
+        return actual_issues, oneis_issues
     
     """
         Retrieves the value of the issue key from the dictionary.
@@ -380,17 +417,8 @@ class JiraApi:
     def get_issue_value(self, link_issue, default=None):
         return link_issue.get('outwardIssue') or link_issue.get('inwardIssue') or default
     
-    """
-        Checks if the given date string is older than four days from the current date.
-
-        Args:
-        date_str (str): The date string to check, in the format 'YYYY-MM-DDTHH:MM:SS.sssZ'.
-        n_days (int): Amount of days to check is older than
-
-        Returns:
-        bool: True if the date is older than amount of days given, False otherwise.
-    """
-    def is_older_than_four_days(self, date_str, n_days):
+    
+    def time_calculator(self, date_str):
         # Define the date format
         date_format = '%Y-%m-%dT%H:%M:%S.%f%z'
         
@@ -403,8 +431,34 @@ class JiraApi:
         # Calculate the difference between the current date and the parsed date
         difference = current_date - parsed_date
 
+        return difference
+
+    def days_passed(self, date_str):
+        # Calculate the difference between the current date and the parsed date
+        difference = self.time_calculator(date_str)
+
+        # Calculate the total number of days including fractional days
+        total_days = difference.days + difference.seconds / (60 * 60 * 24)  # Convert seconds to days  
+        rounded_days = math.ceil(total_days)
         # Check if the difference is greater than or equal to four days
-        return difference >= timedelta(days=n_days)
+        return rounded_days   
+
+    """
+        Checks if the given date string is older than four days from the current date.
+
+        Args:
+        date_str (str): The date string to check, in the format 'YYYY-MM-DDTHH:MM:SS.sssZ'.
+        n_days (int): Amount of days to check is older than
+
+        Returns:
+        bool: True if the date is older than amount of days given, False otherwise.
+    """
+    def is_older_than_four_days(self, date_str, n_days):
+        # Calculate the difference between the current date and the parsed date
+        difference = self.time_calculator(date_str)
+
+        # Check if the difference is greater than or equal to four days
+        return difference >= timedelta(days=n_days)        
     
     """
         Send an email with the links to the problem issues.
@@ -415,23 +469,39 @@ class JiraApi:
         Returns:
         output_code (str): Code on whether or not the email request went through
     """
-    def send_email(self, keys_list, jira_url, additional_text):
-        text = "<p>Here are the issues and links that are blocked or older than 4 days today.</p>"
+    def send_email(self, issue_list, jira_url, additional_text, oneis_dictionary):
+        text = "<head><title>Table with Borders</title><style>table {border-collapse: collapse;width: 100%;}th, td {border: 1px solid black;padding: 8px;text-align: left;}</style></head>"
+        text = text + "<p><strong>List of Blocked or Stalled Tickets</strong></p>"
         link = '/browse/'
-        for key in keys_list:
-            text = text + '<p>' + key + ': ' + '<a href=' + jira_url + link + key + '>' + key + '</a></p>'
+        for issue in issue_list:
+            created_date = issue.get('fields', {}).get('created', {})
+            days = self.days_passed(created_date)
+            key = issue.get('key', {})
+            summary = issue.get('fields', {}).get('summary', {})
+            text = text + '<p><a href=' + jira_url + link + key + '>' + key + ' - ' + str(days) + ' days old</a>: ' + summary + '</p>'
         # Initialize the Postmark client with your server token
-        text = text + '\n' + additional_text
+        text = text + '\n' + "<p><strong>Common Patterns (Autodetected)</strong></p>" + '\n' + additional_text
+        text = text + "<p><strong>Resource Load</strong></p> \n <table><tr><th>Owner</th><th>Ticket Number</th><th>Summary</th></tr>"
+        assignee_to_be_sorted = []
+        for ticket in oneis_dictionary.values():
+            key = ticket['key']
+            owner = ticket['owner']
+            summary = ticket['summary']
+            assignee_to_be_sorted.append("<tr><td>" + owner + "</td><td>" + key + "</td><td>" + summary + "</td></tr>")
+        assignee_to_be_sorted.sort()
+        for row in assignee_to_be_sorted:
+            text = text + row
+        text = text + "</table>"
         email_token = os.getenv('EMAIL_API_KEY')
         client = PostmarkClient(server_token=email_token)
         self.write_to_file(text, 'Outputs/check.txt')
         # Create a Postmark message
-        client.emails.send(
-            From="jaestrada@onenetwork.com",
-            To="kwaldman@onenetwork.com , jaestrada@onenetwork.com" ,
-            Subject="Issues That Are Blocked or Older Than 4 Days",
-            HtmlBody=text
-        )
+        # client.emails.send(
+        #     From="jaestrada@onenetwork.com",
+        #     To="kwaldman@onenetwork.com , jaestrada@onenetwork.com" ,
+        #     Subject="Issues That Are Blocked or Older Than 4 Days",
+        #     HtmlBody=text
+        # )
         print(text)
 
         # # Email configuration
