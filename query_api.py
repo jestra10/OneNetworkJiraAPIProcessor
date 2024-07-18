@@ -314,7 +314,7 @@ class JiraApi:
         fix_version_to_not_keep = {'neo 3.11', 'neo 3.10', 'neo 3.12', 'neo 3.9.1', 'sdk', 'glg neo 3.10.1', 'neo 3.9.0.0.7', 'glg neo 3.9.1'}
         link = '/rest/api/2/issue/'
 
-        # Iterate over each issue in the list of issues
+        # Iterate over each issue in the list of issues - each of these issues have already been filtered by the status
         for issue in data.get('issues', []):
             # Retrieve information
             main_status = issue.get('fields', {}).get('status', {})
@@ -359,15 +359,6 @@ class JiraApi:
                 status = similar_issue.get('fields', {}).get('status', {}).get('name', {})
                 key = similar_issue.get('key', {})
                 summary = similar_issue.get('fields', {}).get('summary', {})
-                if "ONEIS" in key:
-                        if key not in oneis_issues:
-                            response = requests.get(jira_url + link + key, headers=headers)
-                            output = response.json()
-                            try:
-                                assignee = output.get('fields', {}).get('assignee', {}).get('name', {})
-                            except:
-                                assignee = "No Owner"                      
-                            oneis_issues.update({key: {"key": key, "owner": assignee, "summary": summary}})
                 if status not in status_to_not_keep:
                     # Code for HTML table for displaying ONEIS issues
                     '''Below code is for a FILTERED ONEIS issues dictionary'''
@@ -384,6 +375,15 @@ class JiraApi:
                             
                     #         if fix_version_linked_name.lower() not in fix_version_to_not_keep:                        
                     #             oneis_issues.update({key: {"key": key, "owner": assignee, "summary": summary}})
+                    if "ONEIS" in key:
+                        if key not in oneis_issues:
+                            response = requests.get(jira_url + link + key, headers=headers)
+                            output = response.json()
+                            try:
+                                assignee = output.get('fields', {}).get('assignee', {}).get('name', {})
+                            except:
+                                assignee = "No Owner"                      
+                            oneis_issues.update({key: {"key": key, "owner": assignee, "summary": summary}})
                     # If status is blocked add it
                     if status == "Blocked":
                         if key not in filtered_issues:
@@ -487,7 +487,7 @@ class JiraApi:
             key = ticket['key']
             owner = ticket['owner']
             summary = ticket['summary']
-            assignee_to_be_sorted.append("<tr><td>" + owner + "</td><td>" + key + "</td><td>" + summary + "</td></tr>")
+            assignee_to_be_sorted.append("<tr><td>" + owner + "</td><td>" + "<a href=" + jira_url + link + key + ">" + key + "</a></td><td>" + summary + "</td></tr>")
         assignee_to_be_sorted.sort()
         for row in assignee_to_be_sorted:
             text = text + row
