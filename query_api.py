@@ -259,7 +259,10 @@ class JiraApi:
         # with open("Outputs/check.txt", "w") as file:
         #     for item in AI_input_list:
         #         file.write(f"{item}\n")
-        additional_text = crew.AI_summary(AI_input_string)
+        try:
+            additional_text = crew.AI_summary(AI_input_string)
+        except:
+            additional_text = "Error in AI Summary"
         # additional_text = "blah blah blah"
         self.send_email(actual_issues, jira_url, additional_text, oneis_dictionary)
         return json_output
@@ -506,14 +509,14 @@ class JiraApi:
         text = text + "</table>"
         email_token = os.getenv('EMAIL_API_KEY')
         client = PostmarkClient(server_token=email_token)
-        self.write_to_file(text, 'Outputs/check.txt')
+        # self.write_to_file(text, 'Outputs/check.txt')
         # Create a Postmark message
-        # client.emails.send(
-        #     From="jaestrada@onenetwork.com",
-        #     To="kwaldman@onenetwork.com , jaestrada@onenetwork.com" ,
-        #     Subject="Issues That Are Blocked or Older Than 4 Days",
-        #     HtmlBody=text
-        # )
+        client.emails.send(
+            From="jaestrada@onenetwork.com",
+            To="kwaldman@onenetwork.com , jaestrada@onenetwork.com" ,
+            Subject="Issues That Are Blocked or Older Than 4 Days",
+            HtmlBody=text
+        )
         print(text)
 
         # # Email configuration
