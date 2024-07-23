@@ -218,11 +218,10 @@ class JiraApi:
                 'description': None,
                 'summary': None,
                 'created': None,
-                'duedate': None,
                 'labels': None,
                 'priority': ['name'],
                 'status': ['name'],
-                'reporter': ['name', 'key'],
+                'reporter': ['name'],
             },
         }
         AI_input_list = []
@@ -255,7 +254,12 @@ class JiraApi:
             cleaned_string = re.sub(r'[{}]', '', readable_output)
             AI_input_list.append(cleaned_string)
         crew = ThemeCrew()
-        additional_text = crew.AI_summary(AI_input_list)
+        AI_input_string = '\n'.join(AI_input_list)
+        self.write_to_file(AI_input_string, 'Outputs/check.txt')
+        # with open("Outputs/check.txt", "w") as file:
+        #     for item in AI_input_list:
+        #         file.write(f"{item}\n")
+        additional_text = crew.AI_summary(AI_input_string)
         # additional_text = "blah blah blah"
         self.send_email(actual_issues, jira_url, additional_text, oneis_dictionary)
         return json_output
@@ -270,7 +274,10 @@ class JiraApi:
                     filtered_data[key] = self.filter_json(data[key], sub_keys)
                 elif isinstance(sub_keys, list):
                     # Sub-dictionary filtering
-                    filtered_data[key] = {sub_key: data[key][sub_key] for sub_key in sub_keys if sub_key in data[key]}
+                    if data[key] is not None:
+                        filtered_data[key] = {sub_key: data[key][sub_key] for sub_key in sub_keys if sub_key in data[key]}
+                    else:
+                        pass
                 else:
                     # Main dictionary filtering
                     filtered_data[key] = data[key]
@@ -321,6 +328,7 @@ class JiraApi:
             date = issue.get('fields', {}).get('updated', {})
             fix_versions = issue.get('fields', {}).get('fixVersions', {})
             key = issue.get('key', {})
+            type_check = issue.get('fields', {}).get('issuetype', {}).get('name', {})
             try:
                 assignee = issue.get('fields', {}).get('assignee', {}).get('name', {})
             except:
@@ -332,16 +340,17 @@ class JiraApi:
                 fix_version_name = 'placeholder'
             if "ONEIS" in key:
                 if key not in oneis_issues:
-                    oneis_issues.update({key: {"key": key, "owner": assignee, "summary": summary}})
-            # Check if the status is set as blocked
-            if main_status == "Blocked":
-                if key not in filtered_issues:
-                    if fix_version_name.lower() not in fix_version_to_not_keep:
-                        filtered_issues.append(key)
-                        actual_issues.append(issue)
+                    if type_check != "New Feature":
+                        oneis_issues.update({key: {"key": key, "owner": assignee, "summary": summary}})
+            # # Check if the status is set as blocked
+            # if main_status == "Blocked":
+            #     if key not in filtered_issues:
+            #         if type_check != "New Feature":
+            #             if fix_version_name.lower() not in fix_version_to_not_keep:
+            #                 filtered_issues.append(key)
+            #                 actual_issues.append(issue)
             # Check if it hasn't been updated in 4 days
-            elif self.is_older_than_four_days(date, 4):
-                type_check = issue.get('fields', {}).get('issuetype', {}).get('name', {})
+            if self.is_older_than_four_days(date, 4) or main_status == "Blocked":
                 if key not in filtered_issues:
                     if type_check != "New Feature":
                         if fix_version_name.lower() not in fix_version_to_not_keep:
@@ -379,26 +388,29 @@ class JiraApi:
                         if key not in oneis_issues:
                             response = requests.get(jira_url + link + key, headers=headers)
                             output = response.json()
-                            try:
-                                assignee = output.get('fields', {}).get('assignee', {}).get('name', {})
-                            except:
-                                assignee = "No Owner"                      
-                            oneis_issues.update({key: {"key": key, "owner": assignee, "summary": summary}})
+                            type_check = output.get('fields', {}).get('issuetype', {}).get('name', {})
+                            if type_check != "New Feature":
+                                try:
+                                    assignee = output.get('fields', {}).get('assignee', {}).get('name', {})
+                                except:
+                                    assignee = "No Owner"                      
+                                oneis_issues.update({key: {"key": key, "owner": assignee, "summary": summary}})
                     # If status is blocked add it
                     if status == "Blocked":
                         if key not in filtered_issues:
                             response = requests.get(jira_url + link + key, headers=headers)
                             output = response.json()
-
-                            fix_versions_linked = output.get('fields', {}).get('fixVersions', {})
-                            if len(fix_versions_linked) > 0:
-                                fix_version_linked_name = fix_versions_linked[0].get('name', {})
-                            else:
-                                fix_version_linked_name = 'placeholder'
-                            
-                            if fix_version_linked_name.lower() not in fix_version_to_not_keep:
-                                filtered_issues.append(key)
-                                actual_issues.append(issue)
+                            type_check = output.get('fields', {}).get('issuetype', {}).get('name', {})
+                            if type_check != "New Feature":
+                                fix_versions_linked = output.get('fields', {}).get('fixVersions', {})
+                                if len(fix_versions_linked) > 0:
+                                    fix_version_linked_name = fix_versions_linked[0].get('name', {})
+                                else:
+                                    fix_version_linked_name = 'placeholder'
+                                
+                                if fix_version_linked_name.lower() not in fix_version_to_not_keep:
+                                    filtered_issues.append(key)
+                                    actual_issues.append(issue)
         # print(testing_array)
         # print(filtered_issues)
         # return_issues = testing_array + filtered_issues
@@ -494,14 +506,14 @@ class JiraApi:
         text = text + "</table>"
         email_token = os.getenv('EMAIL_API_KEY')
         client = PostmarkClient(server_token=email_token)
-        # self.write_to_file(text, 'Outputs/check.txt')
+        self.write_to_file(text, 'Outputs/check.txt')
         # Create a Postmark message
-        client.emails.send(
-            From="jaestrada@onenetwork.com",
-            To="kwaldman@onenetwork.com , jaestrada@onenetwork.com" ,
-            Subject="Issues That Are Blocked or Older Than 4 Days",
-            HtmlBody=text
-        )
+        # client.emails.send(
+        #     From="jaestrada@onenetwork.com",
+        #     To="kwaldman@onenetwork.com , jaestrada@onenetwork.com" ,
+        #     Subject="Issues That Are Blocked or Older Than 4 Days",
+        #     HtmlBody=text
+        # )
         print(text)
 
         # # Email configuration
