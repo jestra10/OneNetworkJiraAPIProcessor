@@ -55,6 +55,31 @@ class Updater:
             else:  # If the value is not a dictionary, add the key-value pair to the list
                 items.append((new_key, v))
         return dict(items)  # Convert the list of key-value pairs back into a dictionary
+    
+    def create(self):
+        master = pd.read_excel('Bayer/Bayer_PartnerMaster.xlsx', sheet_name='RMS.LSP Master')
+        master_header = pd.DataFrame(columns=master.columns)
+        vendor_master = pd.read_excel('Bayer/Bayer_VendorMasterFinalList.xlsx', sheet_name='Bayer-VendorMasterFinalList_060')
+        provided_list = pd.read_excel('Bayer/Bayer_PartnerProvidedList.xlsx')
+        provided_list['filter_column'] = provided_list['Partner Organization Name'].str.lower()
+        provided_list_cleaned = provided_list.drop_duplicates(subset=['filter_column'])
+        provided_list_cleaned = provided_list_cleaned.drop(columns=['filter_column'])
+        provided_list_cleaned = provided_list_cleaned.reset_index(drop=True)
+        # blank_row = pd.DataFrame([[None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None]], columns=master_header)
+        blank_row = pd.DataFrame([[None] * len(master.columns)], columns=master.columns)
+        
+        for index, row in vendor_master.iterrows():
+            # if index == 0:
+            #     master_header = pd.concat([master_header, blank_row], ignore_index=True)
+            #     # master_header.loc[len(master_header)] = [None] * 34
+            # else:
+                # master_header.loc[len(master_header)] = [None] * 34
+                master_header = pd.concat([master_header, blank_row], ignore_index=True)
+                # master_header.at[index, 'Bayer_PartnerListName'] = row[index, 'Enterprise/Org']
+                master_header.at[len(master_header)-1, 'Bayer_PartnerListName'] = provided_list_cleaned.at[index, 'Partner Name']
+                if row['Match 0\nSimilarity Score'] >= 0.7:
+                    master_header.at[len(master_header)-1, 'Bayer_PartnerResultsName'] = row['Match 0\nEnt Name']
+        master_header.to_excel('Bayer/check.xlsx', index=False)
 
 
-Updater().update()
+Updater().create()

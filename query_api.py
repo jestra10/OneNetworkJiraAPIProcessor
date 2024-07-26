@@ -327,7 +327,7 @@ class JiraApi:
         # Iterate over each issue in the list of issues - each of these issues have already been filtered by the status
         for issue in data.get('issues', []):
             # Retrieve information
-            main_status = issue.get('fields', {}).get('status', {})
+            main_status = issue.get('fields', {}).get('status', {}).get('name', {})
             date = issue.get('fields', {}).get('updated', {})
             fix_versions = issue.get('fields', {}).get('fixVersions', {})
             key = issue.get('key', {})
@@ -341,27 +341,29 @@ class JiraApi:
                     fix_version_name = fix_versions[0].get('name', {})
             else:
                 fix_version_name = 'placeholder'
-            if "ONEIS" in key:
-                if key not in oneis_issues:
-                    if type_check != "New Feature":
-                        oneis_issues.update({key: {"key": key, "owner": assignee, "summary": summary}})
-            # # Check if the status is set as blocked
-            # if main_status == "Blocked":
-            #     if key not in filtered_issues:
-            #         if type_check != "New Feature":
-            #             if fix_version_name.lower() not in fix_version_to_not_keep:
-            #                 filtered_issues.append(key)
-            #                 actual_issues.append(issue)
-            # Check if it hasn't been updated in 4 days
-            if self.is_older_than_four_days(date, 4) or main_status == "Blocked":
-                if key not in filtered_issues:
-                    if type_check != "New Feature":
-                        if fix_version_name.lower() not in fix_version_to_not_keep:
-                            # This is a temporary filter
-                            if 'QAT' not in key:
-                                filtered_issues.append(key)
-                                actual_issues.append(issue)
-                                # filtered_issues.append(issue.get('key', {}))
+            
+            if main_status.lower() not in status_to_not_keep:
+                if "ONEIS" in key:
+                    if key not in oneis_issues:
+                            if type_check != "New Feature":
+                                oneis_issues.update({key: {"key": key, "owner": assignee, "summary": summary}})
+                # # Check if the status is set as blocked
+                # if main_status == "Blocked":
+                #     if key not in filtered_issues:
+                #         if type_check != "New Feature":
+                #             if fix_version_name.lower() not in fix_version_to_not_keep:
+                #                 filtered_issues.append(key)
+                #                 actual_issues.append(issue)
+                # Check if it hasn't been updated in 4 days
+                if self.is_older_than_four_days(date, 4) or main_status.lower() == "blocked":
+                    if key not in filtered_issues:
+                        if type_check != "New Feature":
+                            if fix_version_name.lower() not in fix_version_to_not_keep:
+                                # This is a temporary filter
+                                if 'QAT' not in key:
+                                    filtered_issues.append(key)
+                                    actual_issues.append(issue)
+                                    # filtered_issues.append(issue.get('key', {}))
 
             # Navigate to the 'issuelinks' sub-dictionary
             issuelinks = issue.get('fields', {}).get('issuelinks', {})
@@ -371,7 +373,7 @@ class JiraApi:
                 status = similar_issue.get('fields', {}).get('status', {}).get('name', {})
                 key = similar_issue.get('key', {})
                 summary = similar_issue.get('fields', {}).get('summary', {})
-                if status not in status_to_not_keep:
+                if status.lower() not in status_to_not_keep:
                     # Code for HTML table for displaying ONEIS issues
                     '''Below code is for a FILTERED ONEIS issues dictionary'''
                     # if "ONEIS" in key:
@@ -399,7 +401,7 @@ class JiraApi:
                                     assignee = "No Owner"                      
                                 oneis_issues.update({key: {"key": key, "owner": assignee, "summary": summary}})
                     # If status is blocked add it
-                    if status == "Blocked":
+                    if status.lower() == "blocked":
                         if key not in filtered_issues:
                             response = requests.get(jira_url + link + key, headers=headers)
                             output = response.json()
