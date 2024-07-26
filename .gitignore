@@ -2,5 +2,6 @@
 .venv
 __pycache__
 *.txt
+*.xlsx
 outputdata.xlsx
 poetry.lock
