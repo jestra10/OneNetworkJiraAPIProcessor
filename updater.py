@@ -2,11 +2,11 @@ import requests
 import time
 import pandas as pd
 
-token = 'NzE3NzY5MjYwODkzOlbSahVRZ7fFEpQFwMF8vYVCT8sT'
-VendorMasterFinalList_filepath = 'Bayer/Bayer_VendorMasterFinalList.xlsx'
-PartnerProvidedList_filepath = 'Bayer/Bayer_PartnerProvidedList.xlsx'
-PartnerIntake_filepath = 'Bayer/Bayer_PartnerIntake.xlsx'
-output_filepath = 'Bayer/check.xlsx'
+token = 'placeholder'
+VendorMasterFinalList_filepath = 'placeholder'
+PartnerProvidedList_filepath = 'placeholder'
+PartnerIntake_filepath = 'placeholder'
+output_filepath = 'placeholder'
 
 class Updater:
     def __init__(self):
