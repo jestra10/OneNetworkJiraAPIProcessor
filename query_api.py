@@ -88,13 +88,13 @@ class JiraApi:
             cleaned_string = re.sub(r'[{}]', '', readable_output)
             result = theme_crew.problem_identifier(cleaned_string)
             results.append(result)
-            self.write_to_file(result, "Outputs/output"+str(i+1)+"4.txt")
+            # self.write_to_file(result, "Outputs/output"+str(i+1)+"4.txt")
 
         final_result = theme_crew.synthesize('\n'.join(results))
         # # final_result = theme_crew.problem_identifier(cleaned_string)
         # final_result = theme_crew.synthesize(result1+ '\n' + result2 + '\n' + result3 + '\n' + result4 + '\n' + result5 + '\n' + result6)
         print(final_result)
-        self.write_to_file(final_result, 'Outputs/final4.txt')
+        # self.write_to_file(final_result, 'Outputs/final4.txt')
         # Specify the file path
         file_path = 'Outputs/final4.txt'
         # Open the file in write mode and write the string to the file
@@ -255,7 +255,7 @@ class JiraApi:
             AI_input_list.append(cleaned_string)
         crew = ThemeCrew()
         AI_input_string = '\n'.join(AI_input_list)
-        self.write_to_file(AI_input_string, 'Outputs/check.txt')
+        # self.write_to_file(AI_input_string, 'Outputs/check.txt')
         # with open("Outputs/check.txt", "w") as file:
         #     for item in AI_input_list:
         #         file.write(f"{item}\n")

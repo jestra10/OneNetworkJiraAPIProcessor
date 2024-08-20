@@ -1,10 +1,12 @@
-import os
 import requests
-from getpass import getpass
-from dotenv import load_dotenv
+import time
 import pandas as pd
 
-token = 'place token here'
+token = 'NzE3NzY5MjYwODkzOlbSahVRZ7fFEpQFwMF8vYVCT8sT'
+VendorMasterFinalList_filepath = 'Bayer/Bayer_VendorMasterFinalList.xlsx'
+PartnerProvidedList_filepath = 'Bayer/Bayer_PartnerProvidedList.xlsx'
+PartnerIntake_filepath = 'Bayer/Bayer_PartnerIntake.xlsx'
+output_filepath = 'Bayer/check.xlsx'
 
 class Updater:
     def __init__(self):
@@ -83,7 +85,6 @@ class Updater:
 
         # Write DataFrame to Excel file
         # df.to_excel('Outputs/outputdata.xlsx', index=False, engine='openpyxl')
-        print("Finished process and created a combined excel file.")
         return df
         # print(output)
     
@@ -141,9 +142,9 @@ class Updater:
         }
         master_columns = ['Order','Partner Type','Multi-Org?','Bayer_PartnerListName','Bayer_PartnerIntakeName','Bayer_PartnerResultsName','New Onboarding Admin Wave 1 Data Load?','Engagement Status','Wave','InTake Form Completed?', 'Preferred Connectivity Type','Bayer Priority','ONE Comment','Bayer Comment','Labels','Components','Shipping Location','Registered for Training?','Attended Training?','Category','Vendor Number','Affiliates','VAT / SCAC','Partner Requested SCAC','PAS Ticket','INTEG Ticket','Enterprise','Admin Name','Admin Last Name','Admin Email','Technical Contact First Name','Technical Contact Last Name','Technica Contact Email','Send new email','Bayer V3 Comments','New email','Valid email']
         master_header = pd.DataFrame(columns=master_columns)
-        vendor_master = pd.read_excel('Bayer/Bayer_VendorMasterFinalList.xlsx')
-        provided_list = pd.read_excel('Bayer/Bayer_PartnerProvidedList.xlsx')
-        intake_list = pd.read_excel('Bayer/Bayer_PartnerIntake.xlsx')
+        vendor_master = pd.read_excel(VendorMasterFinalList_filepath)
+        provided_list = pd.read_excel(PartnerProvidedList_filepath)
+        intake_list = pd.read_excel(PartnerIntake_filepath)
         intake_list_cleaned = intake_list.drop_duplicates(subset=['Legal Company Enterprise Name:'])
         intake_list_cleaned = intake_list_cleaned.reset_index(drop=True)
         provided_list['filter_column'] = provided_list['Partner Organization Name'].str.lower()
@@ -153,7 +154,8 @@ class Updater:
         # blank_row = pd.DataFrame([[None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None]], columns=master_header)
         blank_row = pd.DataFrame([[None] * len(master_columns)], columns=master_columns)
         # issue_df = self.update()
-        
+        vendor_master_length = len(vendor_master)
+        i=0
         checked_issue_list = []
         for index, row in vendor_master.iterrows():
             # if index == 0:
@@ -161,6 +163,7 @@ class Updater:
             #     # master_header.loc[len(master_header)] = [None] * 34
             # else:
                 # master_header.loc[len(master_header)] = [None] * 34
+                i += 1
                 master_header = pd.concat([master_header, blank_row], ignore_index=True)
                 # master_header.at[index, 'Bayer_PartnerListName'] = row[index, 'Enterprise/Org']
                 master_header.at[len(master_header)-1, 'Bayer_PartnerListName'] = provided_list_cleaned.at[index, 'Partner Name']
@@ -180,6 +183,10 @@ class Updater:
                     master_header.at[len(master_header)-1, 'Labels'] = labels
                     master_header.at[len(master_header)-1, 'Components'] = components
                     checked_issue_list.append(issue_name)
+                self.simple_progress_bar(i, vendor_master_length)
+                # print(int((i/vendor_master_length) * 100))
+                # if int((i/vendor_master_length) * 100) % 20 == 0:
+                #     print(str(i/vendor_master_length) + "%" + " completed.")
                 
         checked_list = []
         for index, row in intake_list_cleaned.iterrows():
@@ -197,8 +204,17 @@ class Updater:
             checked_list.append(checked)
 
                         
-        master_header.to_excel('Bayer/check.xlsx', index=False)
+        master_header.to_excel(output_filepath, index=False)
+        print("Finished process and created a combined excel file.")
+        time.sleep(5)
 
+    def simple_progress_bar(self, iteration, total, length=50):
+        percent = 100 * (iteration / float(total))
+        filled_length = int(length * iteration // total)
+        bar = '█' * filled_length + '-' * (length - filled_length)
+        print(f'\rProgress: |{bar}| {percent:.1f}% Complete', end='\r')
+        if iteration == total:
+            print()
     def levenshtein_distance(self, s1, s2):
         if len(s1) < len(s2):
             return self.levenshtein_distance(s2, s1)
@@ -236,8 +252,6 @@ class Updater:
         search_name = search_name.replace(')', '')
         search_name = search_name.replace('AND', 'and')
         # print(search_name)
-        response = requests.get(jira_url + api_endpoint + search_name + rest_api_endpoint, headers=headers)
-        print(response.status_code)
         try:
             response = requests.get(jira_url + api_endpoint + search_name + rest_api_endpoint, headers=headers)
             output = response.json()
@@ -362,9 +376,9 @@ class Updater:
         # username = input("Enter JIRA username: ")  # Prompting the user for JIRA username
         # password = getpass("Enter JIRA password: ")  # Securely prompting for JIRA password
 
-        load_dotenv()
-        jira_api_key = os.getenv('JIRA_API_KEY')
-        token = jira_api_key
+        # load_dotenv()
+        # jira_api_key = os.getenv('JIRA_API_KEY')
+        # token = jira_api_key
         headers = {
             "Authorization": "Bearer " + f"{token}",
             "Content-Type": "application/json"
