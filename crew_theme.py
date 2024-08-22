@@ -83,7 +83,7 @@ class ThemeCrew:
     def synthesize(self, context):
         load_dotenv()
         openai_api_key = os.getenv('OPENAI_API_KEY')
-        serper_api_key = os.getenv('SERPER_API_KEY')
+        # serper_api_key = os.getenv('SERPER_API_KEY')
         os.environ["OPENAI_API_KEY"] = openai_api_key
         os.environ["OPENAI_MODEL_NAME"] = 'gpt-3.5-turbo'
 
@@ -126,20 +126,16 @@ class ThemeCrew:
     
     def AI_summary(self, issues):
         load_dotenv()
-        # openai_api_key = os.getenv('OPENAI_API_KEY')
-        # os.environ["OPENAI_API_KEY"] = openai_api_key
-        # os.environ["OPENAI_MODEL_NAME"] = 'gpt-3.5-turbo'
-        # groq_api_key = os.getenv('GROQ_API_KEY')
-        # os.environ['OPENAI_API_KEY']=groq_api_key
-        # os.environ['OPENAI_MODEL_NAME']='llama3-8b-8192'
-        # os.environ['OPENAI_API_BASE']='https://api.groq.com/openai/v1'
-        model = 'llama3-8b-8192'
+        openai_api_key = os.getenv('OPENAI_API_KEY')
+        os.environ["OPENAI_API_KEY"] = openai_api_key
+        os.environ["OPENAI_MODEL_NAME"] = 'gpt-3.5-turbo'
 
-        llm = ChatGroq(
-            temperature=0, 
-            groq_api_key = os.getenv('GROQ_API_KEY'), 
-            model_name=model
-        )
+        # model = 'llama3-8b-8192'
+        # llm = ChatGroq(
+        #     temperature=0, 
+        #     groq_api_key = os.getenv('GROQ_API_KEY'), 
+        #     model_name=model
+        # )
 
         inputs = {
             "issues": issues
@@ -160,8 +156,7 @@ class ThemeCrew:
                     ),
                     allow_delegation=False,
                     verbose=True,
-                    llm = llm
-                    # tools = [jira_api_tool]
+                    # llm = llm
                 )
         inquiry_resolution = Task(
                     description=(
@@ -267,5 +262,3 @@ class ThemeCrew:
         result = crew.kickoff(inputs=inputs)
         print(result)
         return result
-# TH = ThemeCrew()
-# TH.AI_summary("potato")
